@@ -20,6 +20,8 @@ pydantic = "*"
 ipykernel = "*"
 networkx = "*"
 pandera = "*"
+mdtraj = ">=1.11.0,<2"
+matplotlib = ">=3.10.8,<4"
 
 [tool.pixi.pypi-dependencies]
 sandbox = { path = ".", editable = true }
