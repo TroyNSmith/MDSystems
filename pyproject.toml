@@ -1,6 +1,6 @@
 [project]
-name = "sandbox"
-description = "Sandbox"
+name = "MDSystems"
+description = "MDSystems Analysis"
 license = "MIT"
 version = "0.0.1"
 readme = "README.md"
@@ -15,11 +15,8 @@ platforms = ["linux-64", "osx-arm64"]
 [tool.pixi.dependencies]
 numpy = "*"
 scipy = "*"
-pandas = "*"
 pydantic = "*"
 ipykernel = "*"
-networkx = "*"
-pandera = "*"
 mdtraj = ">=1.11.0,<2"
 matplotlib = ">=3.10.8,<4"
 
