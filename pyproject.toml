@@ -6,11 +6,11 @@ version = "0.0.1"
 readme = "README.md"
 keywords = []
 authors = [{name = "Troy N Smith"}]
-requires-python = ">=3.14"
+requires-python = "<=3.12"
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64"]
+platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
 numpy = "*"
@@ -19,9 +19,13 @@ pydantic = "*"
 ipykernel = "*"
 mdtraj = ">=1.11.0,<2"
 matplotlib = ">=3.10.8,<4"
+cupy = ">=13.6.0,<14"
+cuda-version = "11.8.*"
+numba = ">=0.62.1,<0.63"
+
 
 [tool.pixi.pypi-dependencies]
-sandbox = { path = ".", editable = true }
+mdsystems = { path = ".", editable = true }
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
@@ -43,6 +47,10 @@ pytest-xdist = "*"
 
 [tool.pixi.feature.dev.pypi-dependencies]
 ty = "*"
+
+[tool.pixi.target.linux-64.dependencies]
+cupy = ">=13.6.0,<14"
+cuda-version = "11.8.*"
 
 [tool.ruff]
 line-length = 100
