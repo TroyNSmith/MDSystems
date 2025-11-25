@@ -1,12 +1,7 @@
 """Analytical functions pertaining to molecular distribution."""
 
 import numpy as np
-from numba import njit, prange
 
-try:
-    import cupy as cp
-except ImportError:
-    cp = None
 
 def radial_distribution(
     xyz: np.ndarray,
@@ -62,28 +57,3 @@ def radial_distribution(
     if not distinct:
         hist = hist / 2
     return hist, bin_centers
-
-
-@njit(parallel=True)
-def _compute_rdf_loop(xyz_frac, ref_frac, unit_cell, hist, bin_width, cutoff, distinct):
-    n_atoms = xyz_frac.shape[0]
-    m_atoms = ref_frac.shape[0]
-
-    for i in prange(n_atoms):
-        for j in range(m_atoms):
-            if distinct and np.all(xyz_frac[i] == ref_frac[j]):
-                continue
-
-            # Minimum image convention
-            df = xyz_frac[i] - ref_frac[j]
-            df -= np.round(df)
-
-            # Convert to Cartesian
-            dr = df @ unit_cell
-            r2 = dr[0]**2 + dr[1]**2 + dr[2]**2
-
-            if 1e-8 < r2 <= cutoff*cutoff:
-                r = np.sqrt(r2)
-                bin_idx = int(r / bin_width)
-                if bin_idx < hist.shape[0]:
-                    hist[bin_idx] += 1
