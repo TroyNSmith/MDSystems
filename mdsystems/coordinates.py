@@ -36,7 +36,7 @@ class System:
     top: str | None = None
 
     top_filter: str | None = None
-    xyz_filter: str = "x >= -100.0"
+    xyz_filter: str = "x > -100.0"
 
     chunk: int = 100
     stride: int = 0
@@ -81,12 +81,45 @@ class System:
         first_frame = first_chunk[0]
         return first_frame.topology
 
+    @property
+    def unitcell(self) -> np.ndarray:
+        """
+        Return the unitcell of the simulation box.
+
+        Returns
+        -------
+        unitcell
+            np.ndarray with shape (3, 3)
+        """
+        first_chunk = next(
+            mdt.iterload(self.traj, top=self.top, chunk=self.chunk, stride=self.stride)
+        )
+        first_frame = first_chunk[0]
+        return first_frame.unitcell_vectors[0]
+
+    @property
+    def volume(self) -> float:
+        """
+        Return the volume of the simulation box.
+
+        Returns
+        -------
+        unitcell
+            np.ndarray with shape (3, 3)
+        """
+        first_chunk = next(
+            mdt.iterload(self.traj, top=self.top, chunk=self.chunk, stride=self.stride)
+        )
+        first_frame = first_chunk[0]
+        return first_frame.unitcell_volumes[0]
+
+
     def load_frame(
         self,
         com: bool = False,
         vecs: tuple[str, str] | None = None,
         topology_filter: str | None = None,
-        xyz_filter: str = "x > -100.0",
+        xyz_filter: str | None = None,
     ) -> Generator[tuple[np.ndarray, np.ndarray], None, None]:
         """
         Yield filtered frame data from the trajectory.
@@ -135,12 +168,13 @@ class System:
             residue_pairs = parse_vector_pairs(self.topology, atom1, atom2, selected_atoms)
 
         for chunk in self.trajectory:
-            frame0 = chunk[0][0]
+            frame0 = chunk[0]
             box0 = frame0.unitcell_lengths[0]
             xyz0 = frame0.xyz[0]
 
             if com:
                 first_frame = centers_of_masses(xyz0, residue_indices, residue_masses)
+                print(len(xyz0), len(first_frame))
             elif vecs is not None:
                 first_frame = residue_vectors(xyz0, residue_pairs, box0)
             else:
@@ -151,8 +185,6 @@ class System:
             for frame in chunk:
                 xyz = frame.xyz[0]
                 box = frame.unitcell_lengths[0]
-
-                print(f"Frame from: {frame.time[0]} time units")
 
                 if com:
                     vals = centers_of_masses(xyz, residue_indices, residue_masses)
