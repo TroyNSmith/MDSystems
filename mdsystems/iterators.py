@@ -45,7 +45,7 @@ def time_average(
 
     distinct = True
     if ref_system is None:
-        ref_system = copy.copy(system)
+        ref_system = copy(system)
         distinct = False
 
     if stride is not None:
@@ -60,16 +60,20 @@ def time_average(
 
     results = None
 
-    for i, ((first_xyz, xyz), (first_ref, ref)) in enumerate(
-        zip(system.load_frame(com=com, vecs=vecs),
+    for i, ((first_xyz, xyz, resid_xyz), (first_ref, ref, resid_ref)) in enumerate(
+        zip(
+            system.load_frame(com=com, vecs=vecs),
             ref_system.load_frame(com=com, vecs=vecs),
-            strict=True)
+            strict=True,
+        )
     ):
-        result = function(
+        result, bins = function(
             xyz=xyz,
             ref=ref,
             first_xyz=first_xyz,
             first_ref=first_ref,
+            resids=resid_xyz,
+            ref_resids=resid_ref,
             unitcell=unitcell,
             volume=volume,
             distinct=distinct,
@@ -80,4 +84,7 @@ def time_average(
             results = np.zeros_like(result, dtype=np.float32)
 
         results += result
-        raise ValueError(results)
+
+    results /= i
+
+    return results, bins

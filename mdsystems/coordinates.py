@@ -113,13 +113,13 @@ class System:
         first_frame = first_chunk[0]
         return first_frame.unitcell_volumes[0]
 
-
     def load_frame(
         self,
         com: bool = False,
         vecs: tuple[str, str] | None = None,
         topology_filter: str | None = None,
         xyz_filter: str | None = None,
+        return_resids: bool = True,
     ) -> Generator[tuple[np.ndarray, np.ndarray], None, None]:
         """
         Yield filtered frame data from the trajectory.
@@ -137,6 +137,8 @@ class System:
         xyz_filter : str | None
             Boolean expression applied to per-residue coordinates/vectors.
             Overrides the class default if provided.
+        return_resids : bool = True
+            If True, return atom indices sorted by residue.
 
         Yields
         ------
@@ -147,21 +149,18 @@ class System:
             raise ValueError("com=True and vecs!=None are mutually exclusive.")
 
         topology_filter = (
-            topology_filter
-            if topology_filter is not None
-            else getattr(self, "topology_filter", None)
+            topology_filter if topology_filter is not None else getattr(self, "top_filter", None)
         )
         xyz_filter = (
             xyz_filter if xyz_filter is not None else getattr(self, "xyz_filter", "x > -100.0")
         )
 
         if topology_filter is not None:
-            selected_atoms = self.topology.select(self.topology_filter)
+            selected_atoms = self.topology.select(topology_filter)
         else:
             selected_atoms = np.arange(self.topology.n_atoms)
 
-        if com:
-            residue_indices, residue_masses = parse_residues(self.topology, selected_atoms)
+        residue_indices, residue_masses = parse_residues(self.topology, selected_atoms)
 
         if vecs is not None:
             atom1, atom2 = vecs
@@ -174,11 +173,10 @@ class System:
 
             if com:
                 first_frame = centers_of_masses(xyz0, residue_indices, residue_masses)
-                print(len(xyz0), len(first_frame))
             elif vecs is not None:
                 first_frame = residue_vectors(xyz0, residue_pairs, box0)
             else:
-                first_frame = xyz0
+                first_frame = xyz0[selected_atoms]
 
             spatial_indices = spatial_mask(first_frame, xyz_filter)
 
@@ -187,13 +185,25 @@ class System:
                 box = frame.unitcell_lengths[0]
 
                 if com:
-                    vals = centers_of_masses(xyz, residue_indices, residue_masses)
+                    coords = centers_of_masses(xyz, residue_indices, residue_masses)
                 elif vecs is not None:
-                    vals = residue_vectors(xyz, residue_pairs, box)
+                    coords = residue_vectors(xyz, residue_pairs, box)
                 else:
-                    vals = xyz
+                    coords = xyz
 
-                yield first_frame[spatial_indices], vals[spatial_indices]
+                if return_resids:
+                    n_atoms = sum(len(r) for r in residue_indices)
+                    resids = np.zeros(n_atoms, dtype=int)
+                    for resid, atom_indices in enumerate(residue_indices):
+                        resids[atom_indices] = resid
+                    yield (
+                        first_frame[spatial_indices],
+                        coords[spatial_indices],
+                        resids[spatial_indices],
+                    )
+
+                else:
+                    yield first_frame[spatial_indices], coords[spatial_indices]
 
 
 def parse_residues(
