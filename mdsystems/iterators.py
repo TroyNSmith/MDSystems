@@ -1,90 +1,108 @@
 """Functions for performing analysis on iterated frames."""
 
-import copy
+from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
 
 import numpy as np
 
-from . import coordinates
+from .atoms import System
 
 
 def time_average(
-    function: Callable,
-    system: "coordinates.System",
-    ref_system: "coordinates.System" = None,
-    stride: int | None = None,
+    fn: Callable,
+    sys: System,
+    ref: System | None = None,
     com: bool = False,
-    vecs: tuple[str, str] | None = None,
-):
-    """
-    Compute time-averaged value of a function over a trajectory.
+    start_frame: int = 0,
+    end_frame: int | None = None,
+) -> np.ndarray:
+    """Return time average of function results.
 
     Parameters
     ----------
-    function : Callable
-        Function that takes xyz, ref, first_xyz, first_ref, unitcell, volume, distinct
-        and returns a NumPy array (per-frame result).
-    system : coordinates.System
-        System to analyze.
-    ref_system : coordinates.System, optional
-        Reference system for comparison. Defaults to a copy of `system`.
-    stride : int | None, optional
-        Stride to subsample trajectory frames.
-    com : bool, default False
-        If True, compute centers of mass for residues.
-    vecs : tuple(str, str) | None, optional
-        If provided, compute vectors between specified atoms.
+    fn : Callable
+        Function to call.
+    sys : System
+        Trajectory to analyze.
+    ref : System | None (default = None)
+        Trajectory to compare with sys.
+        If None and a second System is necessary, sys is compared to itself.
+    com : Bool (default = False)
+        If True, reduce coordinates to residue-level centers of mass.
+    start_frame : int (default = 0)
+        Index of first frame to analyze in trajectory.
+    end_frame : int | None (default = None)
+        Index of final frame to analyze in trajectory.
 
     Returns
     -------
-    mean_result : np.ndarray
-        Time-averaged result over frames processed.
+    results : np.ndarray
+        1D array of time averaged results.
     """
-    if com and vecs is not None:
-        raise ValueError("com=True and vecs!=None are mutually exclusive.")
+    end_frame = sys.num_frames if end_frame is None else end_frame
 
-    distinct = True
-    if ref_system is None:
-        ref_system = copy(system)
-        distinct = False
+    ref = sys if ref is None else ref
 
-    if stride is not None:
-        system.stride = stride
-        ref_system.stride = stride
+    xyz_a = sys.centers_of_mass if com else sys.coordinates
+    xyz_b = ref.centers_of_mass if com else ref.coordinates
 
-    unitcell = system.unitcell
-    if not np.allclose(unitcell, ref_system.unitcell):
-        raise ValueError("Unitcells for system and reference system do not match.")
+    unitcell = sys.unitcell
 
-    volume = system.volume
+    with ProcessPoolExecutor() as pool:
+        futures = []
+        for i in range(start_frame, end_frame):
+            futures.append(pool.submit(fn, xyz_a[i], xyz_b[i], unitcell[i]))
 
-    results = None
+        results = [f.result() for f in futures]
 
-    for i, ((first_xyz, xyz, resid_xyz), (first_ref, ref, resid_ref)) in enumerate(
-        zip(
-            system.load_frame(com=com, vecs=vecs),
-            ref_system.load_frame(com=com, vecs=vecs),
-            strict=True,
-        )
-    ):
-        result, bins = function(
-            xyz=xyz,
-            ref=ref,
-            first_xyz=first_xyz,
-            first_ref=first_ref,
-            resids=resid_xyz,
-            ref_resids=resid_ref,
-            unitcell=unitcell,
-            volume=volume,
-            distinct=distinct,
-        )
+    return np.mean(results, axis=0)
 
-        result = np.asarray(result, dtype=np.float32)
-        if results is None:
-            results = np.zeros_like(result, dtype=np.float32)
 
-        results += result
+def shifted_correlation(
+    fn,
+    sys: System,
+    com: bool = False,
+    start_frame: int = 0,
+    end_frame: int | None = None,
+    windows: int = 10,
+    points: int = 100,
+):
+    """Return time average of function results.
 
-    results /= i
+    Parameters
+    ----------
+    fn : Callable
+        Function to call.
+    sys : System
+        Trajectory to analyze.
+    com : Bool (default = False)
+        If True, reduce coordinates to residue-level centers of mass.
+    start_frame : int (default = 0)
+        Index of first frame to analyze in trajectory.
+    end_frame : int | None (default = None)
+        Index of final frame to analyze in trajectory.
+    windows : int (default = 10)
+        Number of starting points in the analysis.
+    points : int (default = 100)
+        Number of points to select within each window.
 
-    return results, bins
+    Returns
+    -------
+    results : np.ndarray
+        1D array of averaged results.
+    """
+    end_frame = sys.num_frames if end_frame is None else end_frame
+
+    xyz = sys.centers_of_mass if com else sys.coordinates
+
+    times = sys.times
+    unitcell = sys.unitcell
+
+    with ProcessPoolExecutor() as pool:
+        futures = []
+        for i in range(start_frame, end_frame):
+            futures.append(pool.submit(fn, xyz[i], unitcell[i]))
+
+        results = [f.result() for f in futures]
+
+    return np.mean(results, axis=0)
