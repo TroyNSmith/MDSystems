@@ -44,7 +44,7 @@ def time_average(
     ref = sys if ref is None else ref
 
     xyz_a = sys.centers_of_mass if com else sys.coordinates
-    xyz_b = ref.centers_of_mass if com else ref.coordinates
+    xyz_b = ref.centers_of_mass if com else sys.coordinates
 
     unitcell = sys.unitcell
 
@@ -84,7 +84,7 @@ def shifted_correlation(
     windows : int (default = 10)
         Number of starting points in the analysis.
     points : int (default = 100)
-        Number of points to select within each window.
+        Number of points to analyze.
 
     Returns
     -------
@@ -95,14 +95,46 @@ def shifted_correlation(
 
     xyz = sys.centers_of_mass if com else sys.coordinates
 
-    times = sys.times
+    t = sys.times
     unitcell = sys.unitcell
 
+    origin_indices = np.unique(
+        np.linspace(start_frame, end_frame, windows, endpoint=False, dtype=int)
+    )
+
+    lag_indices = np.unique(
+        (np.logspace(0, np.log10(end_frame - start_frame + 1), num=points) - 1).astype(int)
+    )
+
+    lag_indices = lag_indices[lag_indices < len(t)]
+
+    accumulated = np.zeros(len(lag_indices))
     with ProcessPoolExecutor() as pool:
         futures = []
-        for i in range(start_frame, end_frame):
-            futures.append(pool.submit(fn, xyz[i], unitcell[i]))
+        for origin in origin_indices:
+            frame_indices = origin + lag_indices
+            frame_indices = frame_indices[frame_indices < len(t)]
+
+            futures.append(pool.submit(fn, xyz[origin], xyz[frame_indices], unitcell[origin]))
 
         results = [f.result() for f in futures]
 
-    return np.mean(results, axis=0)
+    padded = []
+    if results[0].ndim == 1:
+        for r in results:
+            pad = np.full(len(lag_indices), np.nan)
+            pad[: len(r)] = r
+            padded.append(pad)
+    else:
+        max_t = max(r.shape[0] for r in results)
+        nbins = results[0].shape[1]
+        padded = []
+        for r in results:
+            pad = np.full((max_t, nbins), np.nan)
+            pad[: r.shape[0], :] = r
+            padded.append(pad)
+
+    accumulated = np.nanmean(padded, axis=0)
+    times = t[lag_indices] - t[0]
+
+    return accumulated, times

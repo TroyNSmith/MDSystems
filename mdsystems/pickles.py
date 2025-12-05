@@ -5,7 +5,30 @@ from numba import njit
 from scipy.spatial import cKDTree
 
 
-def rdf_distances(
+def displacements(ref, lags, box):
+    """Return displacement vectors respecting PBC."""
+    if box.shape == (3, 3):
+        box = box.diagonal()
+
+    dr = lags - ref
+    dr -= np.round(dr / box) * box  # minimum image
+    return dr
+
+
+def incoherent_scattering(ref, lags, box, q):
+    """Compute F_s(q, t) for one origin and an array of lags."""
+    dr = displacements(ref, lags, box)
+    r = np.linalg.norm(dr, axis=2)
+    return np.mean(np.sinc(q * r / np.pi), axis=1)
+
+
+def mean_square_displacements(ref, lags, box):
+    """Compute <r^2(t)> for one origin and an array of lags."""
+    dr = displacements(ref, lags, box)
+    return np.mean(np.sum(dr**2, axis=2), axis=1)
+
+
+def pairwise_distances(
     set_a: np.ndarray,
     set_b: np.ndarray,
     box: np.ndarray,
@@ -15,7 +38,7 @@ def rdf_distances(
     rmax: float,
     **kwargs,
 ):
-    """Compute distances between two sets of coordinates."""
+    """Compute pair-wise distances between two sets of coordinates."""
 
     def __flatten_pairs(pairs, mode):
         I = []
@@ -77,3 +100,26 @@ def rdf_distances(
     ideal_counts = rho * shell_vol * len(set_a)
 
     return hist / ideal_counts
+
+
+def van_hove_self(ref, lags, box, r_edges):
+    """Compute Gs(r,t) for a single origin."""
+    dr = displacements(ref, lags, box)
+    dist = np.linalg.norm(dr, axis=2)
+
+    nbins = len(r_edges) - 1
+    T = dist.shape[0]
+
+    Gs = np.zeros((T, nbins), dtype=np.float32)
+
+    for t in range(T):
+        hist, _ = np.histogram(dist[t], bins=r_edges)
+        Gs[t] = hist
+
+    r_centers = (r_edges[1:] + r_edges[:-1]) / 2
+    shell_volumes = 4 * np.pi * r_centers**2 * (r_edges[1] - r_edges[0])
+
+    Gs /= shell_volumes[None, :]
+    Gs /= dist.shape[1]
+
+    return Gs

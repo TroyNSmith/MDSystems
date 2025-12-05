@@ -75,7 +75,13 @@ class MeanSquareDisplacement:
 
             results = [f.result() for f in futures]
 
-        msd_accum = np.mean(results, axis=0)  # average over origins
+        output = []
+        for r in results:
+            padded = np.full(len(lag_indices), np.nan)
+            padded[: len(r)] = r
+            output.append(padded)
+
+        accumulated = np.nanmean(output, axis=0)  # average over origins
         t = times[lag_indices] - times[0]
 
         return t, msd_accum
