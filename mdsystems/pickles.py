@@ -28,6 +28,17 @@ def mean_square_displacements(ref, lags, box):
     return np.mean(np.sum(dr**2, axis=2), axis=1)
 
 
+def non_gaussian_parameter(ref, lags, box):
+    """Compute alpha_2(t) from an origin and lagged frames."""
+    dr = displacements(ref, lags, box)
+
+    r2 = np.sum(dr**2, axis=2)
+    m2 = np.mean(r2, axis=1)
+    m4 = np.mean(r2**2, axis=1)
+
+    return 3 * m4 / (5 * m2**2) - 1
+
+
 def pairwise_distances(
     set_a: np.ndarray,
     set_b: np.ndarray,

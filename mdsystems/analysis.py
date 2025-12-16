@@ -16,7 +16,7 @@ class Structural:
     def radial_distribution(
         sys: System,
         ref: System | None = None,
-        com: bool = False,
+        com: bool = True,
         mode: str = "total",
         start_frame: int = 0,
         end_frame: int | None = None,
@@ -54,7 +54,7 @@ class Structural:
         g_r : np.ndarray[nbins, np.float32]
             Radial distribution function.
         bin_centers : np.ndarray[nbins, np.float32]
-            Bin centers for radial distribution function.
+            Bin centers.
         """
         ref = sys if ref is None else ref
 
@@ -90,12 +90,10 @@ class Dynamics:
 
         Parameters
         ----------
-        fn : Callable
-            Function to call.
-        q : float
-            Magnitude of the scattering vector, q.
         sys : System
             Trajectory to analyze.
+        q : float
+            Magnitude of the scattering vector, q.
         com : Bool (default = False)
             If True, reduce coordinates to residue-level centers of mass.
         start_frame : int (default = 0)
@@ -110,9 +108,9 @@ class Dynamics:
         Returns
         -------
         g_r : np.ndarray[any, np.float32]
-            Radial distribution function.
+            Incoherent scattering function.
         times : np.ndarray[any, np.float32]
-            Bin centers for radial distribution function.
+            Bin centers.
         """
         fn = partial(pickles.incoherent_scattering, q=q)
         return shifted_correlation(fn, sys, com, start_frame, end_frame, windows, points)
@@ -130,8 +128,6 @@ class Dynamics:
 
         Parameters
         ----------
-        fn : Callable
-            Function to call.
         sys : System
             Trajectory to analyze.
         com : Bool (default = False)
@@ -150,9 +146,45 @@ class Dynamics:
         msd : np.ndarray[any, np.float32]
             Mean square displacement.
         times : np.ndarray[any, np.float32]
-            Time values for mean square displacements.
+            Time values.
         """
         fn = pickles.mean_square_displacements
+        return shifted_correlation(fn, sys, com, start_frame, end_frame, windows, points)
+
+    @staticmethod
+    def non_gaussian_parameter(
+        sys: System,
+        com: bool = False,
+        start_frame: int = 0,
+        end_frame: int | None = None,
+        windows: int = 10,
+        points: int = 100,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return non-Gaussian parameter computed with num. windows shifted correlations.
+
+        Parameters
+        ----------
+        sys : System
+            Trajectory to analyze.
+        com : Bool (default = False)
+            If True, reduce coordinates to residue-level centers of mass.
+        start_frame : int (default = 0)
+            Index of first frame to analyze in trajectory.
+        end_frame : int | None (default = None)
+            Index of final frame to analyze in trajectory.
+        windows : int (default = 10)
+            Number of starting points in the analysis.
+        points : int (default = 100)
+            Number of points to analyze.
+
+        Returns
+        -------
+        alpha : np.ndarray[any, np.float32]
+            Non-Gaussian parameter.
+        times : np.ndarray[any, np.float32]
+            Time values.
+        """
+        fn = pickles.non_gaussian_parameter
         return shifted_correlation(fn, sys, com, start_frame, end_frame, windows, points)
 
     @staticmethod
